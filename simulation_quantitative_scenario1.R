@@ -5,18 +5,17 @@ command_args <- commandArgs(trailingOnly=TRUE)
 #"/Users/lynngao/Desktop/abundance_metadata/count_data/centrifuge_count_hannigan_ctr.rds", 
 #"/Users/lynngao/Desktop/abundance_metadata/count_data/centrifuge_count_yu_ctr.rds", 
 #"/Users/lynngao/Desktop/abundance_metadata/count_data/centrifuge_count_feng_ctr.rds")
-if(length(command_args)!=11){stop("Not enough input parameters!")} 
+if(length(command_args)!=10){stop("Not enough input parameters!")} 
 alpha = as.numeric(command_args[1]) #population difference factor
-lambda = as.numeric(command_args[2]) #library size factor
-sample_size = as.numeric(command_args[3])
-num_gene = as.numeric(command_args[4])
-method = as.character(command_args[5]) #ml method
-phenotype = as.character(command_args[6]) #type of phenotype
-norm_method = as.character(command_args[7]) #combat or conqur
+sample_size = as.numeric(command_args[2])
+num_gene = as.numeric(command_args[3])
+method = as.character(command_args[4]) #ml method
+phenotype = as.character(command_args[5]) #type of phenotype
+norm_method = as.character(command_args[6]) #combat or conqur
 
-count_data1 <- readRDS(command_args[8])
-count_data2 <- readRDS(command_args[9]) 
-count_data3 <- readRDS(command_args[10]) 
+count_data1 <- readRDS(command_args[7])
+count_data2 <- readRDS(command_args[8]) 
+count_data3 <- readRDS(command_args[9]) 
 
 #get fixed library size as median of all samples
 library_size = 1000000
@@ -80,8 +79,8 @@ log_relative_abundance <- function(ds){
 }
 
 
-generate_samples <- function(alpha, lambda, prob, count_data, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method){
-  simulation = rmultinom(sample_size, size = library_size*lambda, prob = prob)
+generate_samples <- function(alpha, prob, count_data, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method){
+  simulation = rmultinom(sample_size, size = library_size, prob = prob)
   simulation_adjust = as.data.frame(t(simulation))
   colnames(simulation_adjust) = colnames(count_data)
   if (norm_method == "conqur"){
@@ -145,13 +144,13 @@ coefs <- c(runif(num_gene - round(num_gene/2), 3, 5), runif(round(num_gene/2), -
 # response3 = NA
 # for (i in 1:100) {
 #   set.seed(i)
-#   simulation1 = as.data.frame(generate_samples(alpha, lambda, prob_v1, count_data1, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)) #training set1
+#   simulation1 = as.data.frame(generate_samples(alpha, prob_v1, count_data1, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)) #training set1
 #   response1 = c(response1, simulation1$status)
 #   set.seed(i+100)
-#   simulation2 = as.data.frame(generate_samples(alpha, lambda, prob_v2, count_data2, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)) #training set2
+#   simulation2 = as.data.frame(generate_samples(alpha, prob_v2, count_data2, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)) #training set2
 #   response2 = c(response2, simulation2$status)
 #   set.seed(i)
-#   simulation3 = as.data.frame(generate_samples(alpha, lambda, prob_v3, count_data3, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)) #testing set
+#   simulation3 = as.data.frame(generate_samples(alpha, prob_v3, count_data3, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)) #testing set
 #   response3 = c(response3, simulation3$status)
 # }
 # response1 = response1[-1]
@@ -163,24 +162,24 @@ coefs <- c(runif(num_gene - round(num_gene/2), 3, 5), runif(round(num_gene/2), -
 for (i in 1:100) {
   if (norm_method == "conqur"){
     set.seed(i)
-    temp = generate_samples(alpha, lambda, prob_v1, count_data1, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)
+    temp = generate_samples(alpha, prob_v1, count_data1, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)
     simulation1 = as.data.frame(temp[1]) #training set1
     simulation1_count = as.data.frame(temp[2]) #training set1 count data
     set.seed(i+100)
-    temp = generate_samples(alpha, lambda, prob_v2, count_data2, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)
+    temp = generate_samples(alpha, prob_v2, count_data2, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)
     simulation2 = as.data.frame(temp[1]) #training set2
     simulation2_count = as.data.frame(temp[2]) #training set2 count data
     set.seed(i)
-    temp = generate_samples(alpha, lambda, prob_v3, count_data3, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)
+    temp = generate_samples(alpha, prob_v3, count_data3, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)
     simulation3 = as.data.frame(temp[1]) #testing set
     simulation3_count = as.data.frame(temp[2]) #testing set count data
   }else{
     set.seed(i)
-    simulation1 = as.data.frame(generate_samples(alpha, lambda, prob_v1, count_data1, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)) #training set1
+    simulation1 = as.data.frame(generate_samples(alpha, prob_v1, count_data1, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)) #training set1
     set.seed(i+100)
-    simulation2 = as.data.frame(generate_samples(alpha, lambda, prob_v2, count_data2, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)) #training set2
+    simulation2 = as.data.frame(generate_samples(alpha, prob_v2, count_data2, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)) #training set2
     set.seed(i)
-    simulation3 = as.data.frame(generate_samples(alpha, lambda, prob_v3, count_data3, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)) #testing set
+    simulation3 = as.data.frame(generate_samples(alpha, prob_v3, count_data3, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)) #testing set
   }
   
   ## normalize two training sets
@@ -335,11 +334,11 @@ perf_df[103,] = apply(perf_df[1:100,], 2, median)
 perf_df[104,] = apply(perf_df[1:100,], 2, IQR)
 
 ####  Output results
-file_name <- sprintf('scenario1_%s_rmse_%s_%s_a%s_l%s_s%s_g%s_test%s_logRelAbun.csv', 
+file_name <- sprintf('scenario1_%s_rmse_%s_%s_a%s_s%s_g%s_test%s_logRelAbun.csv', 
                      gsub('.', '', method, fixed=T),
                      gsub('.', '', phenotype, fixed=T),
                      gsub('.', '', norm_method, fixed=T),
-                     gsub('.', '', alpha, fixed=T), gsub('.', '', lambda, fixed=T), 
+                     gsub('.', '', alpha, fixed=T),
                      gsub('.', '', sample_size, fixed=T), gsub('.', '', num_gene, fixed=T),
-                     gsub('.', '', sub(".*_count_*(.*?)_ctr.*", "\\1", command_args[10]), fixed=T))
-write.csv(perf_df, paste0(command_args[11],file_name))
+                     gsub('.', '', sub(".*_count_*(.*?)_ctr.*", "\\1", command_args[9]), fixed=T))
+write.csv(perf_df, paste0(command_args[10],file_name))
