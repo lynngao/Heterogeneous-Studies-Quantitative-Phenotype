@@ -1,12 +1,9 @@
-source("helper.R")
 
-command_args <- commandArgs(trailingOnly=TRUE)
 #command_args <- c(0,1,100,10,"rfr","linear","conqur",
 #"/Users/lynngao/Desktop/abundance_metadata/count_data/centrifuge_count_hannigan_ctr.rds", 
 #"/Users/lynngao/Desktop/abundance_metadata/count_data/centrifuge_count_yu_ctr.rds", 
 #"/Users/lynngao/Desktop/abundance_metadata/count_data/centrifuge_count_feng_ctr.rds")
-if(length(command_args)!=11){stop("Not enough input parameters!")} 
-alpha = as.numeric(command_args[1]) #population difference factor
+
 lambda = as.numeric(command_args[2]) #library size factor
 sample_size = as.numeric(command_args[3])
 num_gene = as.numeric(command_args[4])
