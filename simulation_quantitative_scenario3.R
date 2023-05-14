@@ -15,9 +15,12 @@ method = as.character(command_args[4]) #ml method
 phenotype = as.character(command_args[5]) #type of phenotype
 norm_method = as.character(command_args[6]) #combat or conqur
 
-count_data1 <- readRDS(command_args[7]) 
+count_data1 <- readRDS(command_args[7])
+count_data1 <- count_data1[,which(colSums(count_data1) != 0)]
 count_data2 <- readRDS(command_args[8])
-count_data3 <- readRDS(command_args[9]) 
+count_data2 <- count_data2[,which(colSums(count_data2) != 0)]
+count_data3 <- readRDS(command_args[9])
+count_data3 <- count_data3[,which(colSums(count_data3) != 0)]
 
 #get fixed library size as median of all samples
 library_size = 1000000
