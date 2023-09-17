@@ -7,6 +7,7 @@ library(ConQuR)
 library(doParallel) 
 library(randomForestSRC)
 library(CoxBoost)
+library(kernlab)
 
 all(sapply(c("SummarizedExperiment", "plyr", "sva", "MCMCpack", "ROCR", "ggplot2", "limma", "lsei", "nnls", "glmnet", 
              "rpart", "genefilter", "nnet", "e1071", "RcppArmadillo", "foreach", "parallel", "doParallel",
@@ -52,6 +53,28 @@ ml_model <- function(training, method) {
     parameters <- seq(0,1,0.001)
     model<- train(
       status ~ ., data = training, method = "glmnet", family="binomial",metric = "ROC", tuneGrid = expand.grid(alpha = 1, lambda = parameters),
+      trControl = trainControl(method = "repeatedcv", number = 10, search = "grid", summaryFunction = twoClassSummary, classProbs = TRUE, savePredictions = TRUE)
+    )
+  }
+  if (method == "svm"){
+    model <- train(
+      status ~ ., data = training, method = "svmLinear", metric = "ROC",
+      trControl = trainControl(method = "repeatedcv", number = 10, search = "grid", summaryFunction = twoClassSummary, classProbs = TRUE, savePredictions = TRUE)
+    )
+  }
+  if (method == "xgb"){
+    grid_search = expand.grid(
+      nrounds = 1000,
+      max_depth = c(2, 4, 6, 8, 10),
+      # default values below
+      eta = 0.3,
+      gamma = 0,
+      subsample = 1,
+      min_child_weight = 1,
+      colsample_bytree = 0.6
+    )
+    model <- train(
+      status ~ ., data = training, method = "xgbTree", metric = "ROC", tuneGrid = grid_search,
       trControl = trainControl(method = "repeatedcv", number = 10, search = "grid", summaryFunction = twoClassSummary, classProbs = TRUE, savePredictions = TRUE)
     )
   }
@@ -400,6 +423,42 @@ CS_zmatrix <- function(n_batch, training, perf_name, method, feature_list=NULL){
           perf_tmp <- performance(rocr_pred, perf_name)  # mean cross entropy
           zmat[i,j] <- as.numeric(perf_tmp@y.values)
         }
+        if (method == "svm"){
+          model <- train(
+            status ~ ., data = training[[i]], method = "svmLinear", metric = "ROC", 
+            trControl = trainControl(method = "repeatedcv", number = 10, search = "grid", summaryFunction = twoClassSummary, classProbs = TRUE, savePredictions = TRUE)
+          )
+          tmp_pred <- predict(model, training[[j]], type="prob")$case
+          test_label = ifelse(training[[j]]$status == "ctr", 0, 1)
+          if(perf_name=="mxe"){tmp_pred <- pmax(pmin(tmp_pred, 1 - 1e-15), 1e-15)}
+          # avoid Inf in computing cross-entropy loss
+          rocr_pred <- prediction(tmp_pred, test_label)
+          perf_tmp <- performance(rocr_pred, perf_name)  # mean cross entropy
+          zmat[i,j] <- as.numeric(perf_tmp@y.values)
+        }
+        if (method == "xgb"){
+          grid_search = expand.grid(
+            nrounds = 1000,
+            max_depth = c(2, 4, 6, 8, 10),
+            # default values below
+            eta = 0.3,
+            gamma = 0,
+            subsample = 1,
+            min_child_weight = 1,
+            colsample_bytree = 0.6
+          )
+          model <- train(
+            status ~ ., data = training[[i]], method = "xgbTree", metric = "ROC", tuneGrid = grid_search,
+            trControl = trainControl(method = "repeatedcv", number = 10,search = "grid", summaryFunction = twoClassSummary, classProbs = TRUE, savePredictions = TRUE)
+          )
+          tmp_pred <- predict(model, training[[j]], type="prob")$case
+          test_label = ifelse(training[[j]]$status == "ctr", 0, 1)
+          if(perf_name=="mxe"){tmp_pred <- pmax(pmin(tmp_pred, 1 - 1e-15), 1e-15)}
+          # avoid Inf in computing cross-entropy loss
+          rocr_pred <- prediction(tmp_pred, test_label)
+          perf_tmp <- performance(rocr_pred, perf_name)  # mean cross entropy
+          zmat[i,j] <- as.numeric(perf_tmp@y.values)
+        }
         if (method == "lasso"){
           parameters <- seq(0,1,0.001)
           model <- train(
@@ -477,6 +536,32 @@ Reg_SSL_pred <- function(n_batch, training, method, feature_list=NULL){
         pred <- predict(model, training[[k]], type="prob")
         return(pred$case)
       }
+      if (method == "svm"){
+        model <- train(
+          status ~ ., data = training[[batch_id]], method = "svmLinear", metric = "ROC", 
+          trControl = trainControl(method = "repeatedcv", number = 10, search = "grid", summaryFunction = twoClassSummary, classProbs = TRUE, savePredictions = TRUE)
+        )
+        pred <- predict(model, training[[k]], type="prob")
+        return(pred$case)
+      }
+      if (method == "xgb"){
+        grid_search = expand.grid(
+          nrounds = 1000,
+          max_depth = c(2, 4, 6, 8, 10),
+          # default values below
+          eta = 0.3,
+          gamma = 0,
+          subsample = 1,
+          min_child_weight = 1,
+          colsample_bytree = 0.6
+        )
+        model <- train(
+          status ~ ., data = training[[batch_id]], method = "xgbTree", metric = "ROC", tuneGrid = grid_search,
+          trControl = trainControl(method = "repeatedcv", number = 10, search = "grid", summaryFunction = twoClassSummary, classProbs = TRUE, savePredictions = TRUE)
+        )
+        pred <- predict(model, training[[k]], type="prob")
+        return(pred$case)
+      }
       if (method == "lasso"){
         parameters <- seq(0,1,0.001)
         model <- train(
@@ -512,7 +597,7 @@ Reg_SSL_pred <- function(n_batch, training, method, feature_list=NULL){
     })
     names(tmp) <- paste0("Simulation", 1:n_batch)
     SSL_pred_lst[[k]] <- do.call(cbind, tmp)
-    if (method == "rf" | method == 'logit'){
+    if (method == "rf" | method == 'logit' | method == 'svm' | method == 'xgb'){
       test_label = ifelse(training[[k]]$status == "ctr", 0, 1)
       coef_k <- pnnls(a=SSL_pred_lst[[k]], b=test_label, sum=1)$x  
       SSL_coef_lst[[k]] <- coef_k

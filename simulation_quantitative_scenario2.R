@@ -1,9 +1,10 @@
-source("helper.R")
+source("/home1/kw_893/Heterogeneous_scripts/helper.R")
 
 ####  Simulate data from same background population
 command_args <- commandArgs(trailingOnly=TRUE)
 #command_args <- c(100,10,"/Users/lynngao/Desktop/abundance_metadata/count_data/centrifuge_count_yu_ctr.rds",
                   #2,100,100,3,1,"rfr","linear","conqur")
+if(length(command_args)!=12){stop("Not enough input parameters!")}
 test_sample_size = as.numeric(command_args[1])
 num_gene = as.numeric(command_args[2])
 count_data1 <- readRDS(command_args[3]) #Asian population
@@ -34,7 +35,15 @@ log_relative_abundance <- function(ds){
 }
 
 generate_samples <- function(prob, count_data, sample_size, num_gene, otu_selected, coefs, phenotype, norm_method){
-  simulation = rmultinom(sample_size, size = library_size, prob = prob)
+  prob = rdirichlet(sample_size, 100000 * prob)
+  
+  simulation = matrix(nrow=length(top_otu1))
+  for (i in 1:nrow(prob)){
+    set.seed(i)
+    sim = rmultinom(1, size = library_size, prob = as.vector(prob[i,]))
+    simulation = cbind(simulation, c(sim[,1]))
+  }
+  simulation = simulation[,-1]
   simulation_adjust = as.data.frame(t(simulation))
   colnames(simulation_adjust) = colnames(count_data)
   simulation_adjust = log_relative_abundance(simulation_adjust)
@@ -146,12 +155,14 @@ for(i in 1:iterations){
   simulation2 = as.data.frame(generate_samples(prob_v1, count_data1, N_sample_size[2], num_gene, otu_selected, coefs, phenotype, norm_method)) #training set2
   set.seed(i+200)
   simulation3 = as.data.frame(generate_samples(prob_v1, count_data1, test_sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)) #testing set
+  set.seed(i+300)
+  validation = as.data.frame(generate_samples(prob_v1, count_data1, test_sample_size, num_gene, otu_selected, coefs, phenotype, norm_method)) #validation set
   
-  # divide test data into training, test and validation
+  # Define testing set and validation set
   testing = simulation3
   sample = sample.int(n=nrow(testing),size=floor(0.5*nrow(testing)),replace=F)
-  val = testing[sample,]
-  testing_val = testing[rownames(testing)%!in%rownames(val),]
+  val = validation
+  testing_val = testing
 
   tst_scores_modlst <- cs_zmat_lst <- list()  # list of results for each model
   
@@ -173,10 +184,13 @@ for(i in 1:iterations){
   curr_train_expr = rbind(batch1, batch2)
   
   ## Simulate batch effect 
+  set.seed(i)
   sim_batch_res <- simBatch(curr_train_expr, N_sample_size, batches_ind, batch, hyper_pars)
   train_expr_batch <- sim_batch_res$new_dat
   batch1_simulated = train_expr_batch[1:N_sample_size[1],]
+  batch1_sim = batch1_simulated
   batch2_simulated = train_expr_batch[(N_sample_size[1]+1):nrow(train_expr_batch),]
+  batch2_sim = batch2_simulated
   
   ##normalization on batch and testing dataset (simulation3 as reference)
   if (norm_method == "combat"){
@@ -237,8 +251,8 @@ for(i in 1:iterations){
   
   
   ## Obtain predictions from learner trained within each batch
-  ml1 <- ml_model(batch1_simulated, method)
-  ml2 <- ml_model(batch2_simulated, method)
+  ml1 <- ml_model(batch1_sim, method)
+  ml2 <- ml_model(batch2_sim, method)
   ml1_norm <- ml_model(batch1_norm, method)
   ml2_norm <- ml_model(batch2_norm, method)
   pred_prob1 = predict(ml1, test_expr_norm)
@@ -323,11 +337,11 @@ for(i in 1:iterations){
   # Weighting by validation set performance
   coef1 = RMSE(val_expr_norm$status, pred_sgbatch_res_val$Batch1)
   coef2 = RMSE(val_expr_norm$status, pred_sgbatch_res_val$Batch2)
-  pred_val_auc = as.matrix(1/coef1*pred_mat[,1] + 1/coef2*pred_mat[,2])/(1/coef1+1/coef2)
+  pred_val_auc = as.matrix(1/coef1*pred_mat_testing_val[,1] + 1/coef2*pred_mat_testing_val[,2])/(1/coef1+1/coef2)
   
   coef1_norm = RMSE(val_expr_norm$status, pred_sgbatch_res_val_norm$Batch1)
   coef2_norm = RMSE(val_expr_norm$status, pred_sgbatch_res_val_norm$Batch2)
-  pred_val_auc_norm = as.matrix(1/coef1_norm*pred_mat_norm[,1] + 1/coef2_norm*pred_mat_norm[,2])/(1/coef1_norm+1/coef2_norm)
+  pred_val_auc_norm = as.matrix(1/coef1_norm*pred_mat_norm_testing_val[,1] + 1/coef2_norm*pred_mat_norm_testing_val[,2])/(1/coef1_norm+1/coef2_norm)
   
   
   # LOSO

@@ -1,10 +1,10 @@
-source("helper.R")
+source("/home1/kw_893/Heterogeneous_scripts/helper.R")
 
 command_args <- commandArgs(trailingOnly=TRUE)
 #command_args <- c(100,10,2,"rfr","log","conqur",
-#"/Users/lynngao/Desktop/abundance_metadata/count_data/centrifuge_count_hannigan_ctr.rds",
-#"/Users/lynngao/Desktop/abundance_metadata/count_data/centrifuge_count_yu_ctr.rds", 
-#"/Users/lynngao/Desktop/abundance_metadata/count_data/centrifuge_count_feng_ctr.rds")
+#"/home1/kw_893/Heterogeneous_data/centrifuge_count_hannigan_ctr.rds",
+#"/home1/kw_893/Heterogeneous_data/centrifuge_count_yu_ctr.rds", 
+#"/home1/kw_893/Heterogeneous_data/centrifuge_count_feng_ctr.rds")
 if(length(command_args)!=10){stop("Not enough input parameters!")} 
 #population difference alpha(0,0.5,1), library size factor lambda(0.5,1,2), sample size, 
 #genes, disease effect factor(1,2,5), dataset1, dataset2, saved table location
@@ -84,7 +84,15 @@ log_relative_abundance <- function(ds){
 }
 
 generate_samples <- function(prob, count_data, sample_size, otu_selected, coefs, phenotype, norm_method){
-  simulation = rmultinom(sample_size, size = library_size, prob = prob)
+ # simulation = rmultinom(sample_size, size = library_size, prob = prob)
+  prob = rdirichlet(sample_size, 100000 * prob)
+  simulation = matrix(nrow=length(union_species))
+  for (i in 1:nrow(prob)){
+    set.seed(i)
+    sim = rmultinom(1, size = library_size, prob = as.vector(prob[i,]))
+    simulation = cbind(simulation, c(sim[,1]))
+  }
+  simulation = simulation[,-1]
   simulation_adjust = as.data.frame(t(simulation))
   colnames(simulation_adjust) = colnames(count_data)
   if (norm_method == "conqur"){
@@ -109,7 +117,7 @@ generate_samples <- function(prob, count_data, sample_size, otu_selected, coefs,
   }
   if (phenotype == "log"){
     for (i in 1:sample_size){
-      simulation_adjust$status[i] = 1e+15 / (1 + exp(as.matrix(simulation_adjust[i,otu_selected]) %*% coefs))  + noise[i]
+      simulation_adjust$status[i] = 1e+8 / (1 + exp(as.matrix(simulation_adjust[i,otu_selected]) %*% coefs))  + noise[i]
     }
   }
   if (phenotype == "sin"){
@@ -150,15 +158,15 @@ if (overlap_gene == num_gene){
 # response1 = NA
 # response2 = NA
 # response3 = NA
-# for (i in 1:100) {
+# for (i in 1:10) {
 #   set.seed(i)
-#   simulation1 = as.data.frame(generate_samples(prob_v1, count_data1, sample_size, otu_selected1, coefs1, phenotype)) #training set1response1 = c(response1, simulation1$status)
+#   simulation1 = as.data.frame(generate_samples(prob_v1, count_data1, sample_size, otu_selected1, coefs1, phenotype,0)) #training set1response1 = c(response1, simulation1$status)
 #   response1 = c(response1, simulation1$status)
 #   set.seed(i+100)
-#   simulation2 = as.data.frame(generate_samples(prob_v2, count_data2, sample_size, otu_selected1, coefs1, phenotype)) #training set2
+#   simulation2 = as.data.frame(generate_samples(prob_v2, count_data2, sample_size, otu_selected1, coefs1, phenotype,0)) #training set2
 #   response2 = c(response2, simulation2$status)
 #   set.seed(i)
-#   simulation3 = as.data.frame(generate_samples(prob_v3, count_data3, sample_size, otu_selected2, coefs2, phenotype)) #testing set
+#   simulation3 = as.data.frame(generate_samples(prob_v3, count_data3, sample_size, otu_selected2, coefs2, phenotype,0)) #testing set
 #   response3 = c(response3, simulation3$status)
 # }
 # response1 = response1[-1]
@@ -180,6 +188,10 @@ for (i in 1:100) {
     temp = generate_samples(prob_v3, count_data3, sample_size, otu_selected2, coefs2, phenotype, norm_method)
     simulation3 = as.data.frame(temp[1]) #testing set
     simulation3_count = as.data.frame(temp[2]) #testing set count data
+    set.seed(i+100)
+    temp = generate_samples(prob_v3, count_data3, sample_size, otu_selected2, coefs2, phenotype, norm_method)
+    validation = as.data.frame(temp[1]) #validation set
+    validation_count = as.data.frame(temp[2]) #validation set count data
   }else{
     set.seed(i)
     simulation1 = as.data.frame(generate_samples(prob_v1, count_data1, sample_size, otu_selected1, coefs1, phenotype, norm_method)) #training set1
@@ -187,7 +199,10 @@ for (i in 1:100) {
     simulation2 = as.data.frame(generate_samples(prob_v2, count_data2, sample_size, otu_selected1, coefs1, phenotype, norm_method)) #training set2
     set.seed(i)
     simulation3 = as.data.frame(generate_samples(prob_v3, count_data3, sample_size, otu_selected2, coefs2, phenotype, norm_method)) #testing set
+    set.seed(i+100)
+    validation = as.data.frame(generate_samples(prob_v3, count_data3, sample_size, otu_selected2, coefs2, phenotype, norm_method)) #validation set
   }
+
   
   ## normalize two training sets
   if(norm_method == "combat"){
@@ -211,8 +226,8 @@ for (i in 1:100) {
   ## Split testing set into validation and testing
   testing = simulation3
   sample = sample.int(n=nrow(testing),size=floor(0.5*nrow(testing)),replace=F)
-  val = testing[sample,]
-  testing_val = testing[rownames(testing)%!in%rownames(val),]
+  val = validation
+  testing_val = testing
   
   ## Obtain predictions from learner trained within each training set
   ml1 = ml_model(simulation1, method)
