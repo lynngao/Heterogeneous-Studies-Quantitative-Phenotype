@@ -1,4 +1,4 @@
-source("/home1/kw_893/Heterogeneous_scripts/helper.R")
+source("helper.R")
 
 command_args <- commandArgs(trailingOnly=TRUE)
 #command_args <- c(1,100,10,"rfr","log","conqur",
